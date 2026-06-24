@@ -2,7 +2,7 @@
 
 # 🔌 OpenWebUI Proxy
 
-**A clean OpenAI-compatible `/v1` in front of any Open WebUI instance.**
+**A clean OpenAI-compatible API in front of any Open WebUI instance.**
 
 Open WebUI already speaks OpenAI at `/api/chat/completions`, but it lives under `/api` and needs a logged-in **JWT** (when API keys are disabled). This proxy signs in with your Open WebUI account, keeps the JWT fresh, and exposes a standard `/v1` endpoint any client can use — **without opening the Open WebUI interface**.
 
