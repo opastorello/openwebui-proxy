@@ -21,6 +21,7 @@ Open WebUI already speaks OpenAI at `/api/chat/completions`, but it lives under 
 
 - 🔑 **Auto sign-in** with your Open WebUI email/password → JWT, **refreshed automatically**.
 - 🌊 **Streaming + non-streaming** — transparent OpenAI passthrough.
+- 🧠 **Thinking + tools** — the model's reasoning is surfaced as `<think>…</think>` so any client shows it (and streams immediately); `tool_calls` pass through.
 - 🕵️ **Invisible** — only runs inference; never saves chats to your Open WebUI history.
 - 📚 **Interactive docs** at **`/docs`** (Swagger, with Authorize).
 - 🐳 **Docker-first** — secrets stay in `.env`, never in the image.
@@ -118,6 +119,7 @@ See [`.env.example`](.env.example).
 | `DEFAULT_MODEL` | _(empty)_ | Model used when the request omits `model` |
 | `PROXY_PORT` | `5002` | Host port (container listens on 5002) |
 | `PROXY_API_KEY` | _(empty)_ | If set, clients must send `Authorization: Bearer <key>` |
+| `REASONING_TO_CONTENT` | `1` | Wrap thinking as `<think>…</think>` in `content` (`0` = raw `reasoning_content`) |
 | `BACKEND_TIMEOUT` | `600` | Upstream timeout (s) |
 
 ## 🔐 Security
@@ -132,6 +134,7 @@ See [`.env.example`](.env.example).
 | `initial sign-in failed` in logs | Check `UPSTREAM_BASE` and `OWUI_EMAIL`/`OWUI_PASSWORD` |
 | `401` from `/v1/...` | `PROXY_API_KEY` is set — send `Authorization: Bearer <key>` |
 | Empty `/v1/models` | The signed-in account has no models granted on the instance |
+| Client loads forever with a "thinking" model | `REASONING_TO_CONTENT=1` (default) streams the thinking as `<think>`; set `0` only if the client supports `reasoning_content` |
 | Upstream errors pass through | The proxy forwards Open WebUI's error body and status as-is |
 
 ## 📄 License

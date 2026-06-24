@@ -26,3 +26,24 @@ def test_auth_status_shape_without_login():
     body = client.get("/auth/status").json()
     assert body["authenticated"] is False
     assert "upstream" in body
+
+
+def test_wrap_reasoning_final_moves_to_think_tags():
+    obj = {
+        "choices": [
+            {"message": {"role": "assistant", "content": "Hi", "reasoning_content": "thinking"}}
+        ]
+    }
+    msg = app._wrap_reasoning_final(obj)["choices"][0]["message"]
+    assert "reasoning_content" not in msg
+    assert msg["content"] == "<think>\nthinking\n</think>\n\nHi"
+
+
+def test_transform_chunk_opens_and_closes_think():
+    state = {"open": False}
+    a = {"choices": [{"delta": {"reasoning_content": "ponder"}}]}
+    app._transform_chunk(a, state)
+    assert a["choices"][0]["delta"]["content"] == "<think>\nponder" and state["open"] is True
+    b = {"choices": [{"delta": {"content": "answer"}}]}
+    app._transform_chunk(b, state)
+    assert b["choices"][0]["delta"]["content"] == "\n</think>\n\nanswer" and state["open"] is False

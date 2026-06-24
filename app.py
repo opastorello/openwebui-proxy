@@ -52,6 +52,9 @@ DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "")
 PROXY_API_KEY = os.getenv("PROXY_API_KEY", "")
 PROXY_PORT = int(os.getenv("PROXY_PORT", "5002"))
 BACKEND_TIMEOUT = float(os.getenv("BACKEND_TIMEOUT", "600"))
+# Surface the model's thinking as <think>…</think> inside `content`, so clients that
+# don't understand `reasoning_content` still show it (and stream right away). 0 = raw.
+REASONING_TO_CONTENT = os.getenv("REASONING_TO_CONTENT", "1").lower() in {"1", "true", "yes", "on"}
 
 SIGNIN_PATH = "/api/v1/auths/signin"
 CHAT_PATH = "/api/chat/completions"
@@ -117,6 +120,70 @@ tokens = TokenManager()
 
 def _upstream_headers() -> dict:
     return {"Authorization": f"Bearer {tokens.get_token()}", "Content-Type": "application/json"}
+
+
+# ─── Reasoning → <think> compatibility (for clients without reasoning_content) ─
+def _wrap_reasoning_final(obj: dict) -> dict:
+    for choice in obj.get("choices") or []:
+        msg = choice.get("message")
+        if isinstance(msg, dict):
+            reasoning = msg.pop("reasoning_content", None)
+            if reasoning:
+                msg["content"] = f"<think>\n{reasoning}\n</think>\n\n" + (msg.get("content") or "")
+    return obj
+
+
+def _transform_chunk(obj: dict, state: dict) -> None:
+    for choice in obj.get("choices") or []:
+        delta = choice.get("delta")
+        if not isinstance(delta, dict):
+            continue
+        reasoning = delta.pop("reasoning_content", None)
+        if reasoning:
+            prefix = "" if state["open"] else "<think>\n"
+            state["open"] = True
+            delta["content"] = prefix + (delta.get("content") or "") + reasoning
+        elif state["open"] and (
+            delta.get("content") or delta.get("tool_calls") or choice.get("finish_reason")
+        ):
+            delta["content"] = "\n</think>\n\n" + (delta.get("content") or "")
+            state["open"] = False
+
+
+def _stream_reasoning_to_content(resp):
+    state = {"open": False}
+    meta = {"id": "chatcmpl", "model": DEFAULT_MODEL, "created": 0}
+    try:
+        for raw in resp:
+            line = raw.decode("utf-8", "replace").strip()
+            if not line.startswith("data: "):
+                continue
+            data = line[6:]
+            if data == "[DONE]":
+                break
+            try:
+                obj = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            meta["id"] = obj.get("id", meta["id"])
+            meta["model"] = obj.get("model", meta["model"])
+            meta["created"] = obj.get("created", meta["created"])
+            _transform_chunk(obj, state)
+            yield f"data: {json.dumps(obj)}\n\n".encode()
+        if state["open"]:
+            close = {
+                "id": meta["id"],
+                "object": "chat.completion.chunk",
+                "created": meta["created"],
+                "model": meta["model"],
+                "choices": [
+                    {"index": 0, "delta": {"content": "\n</think>\n\n"}, "finish_reason": None}
+                ],
+            }
+            yield f"data: {json.dumps(close)}\n\n".encode()
+        yield b"data: [DONE]\n\n"
+    finally:
+        resp.close()
 
 
 # ─── Client auth (optional) ──────────────────────────────────────────
@@ -227,6 +294,12 @@ def chat_completions(req: ChatCompletionRequest, _: None = Depends(require_auth)
         )
 
     if is_stream:
+        if REASONING_TO_CONTENT:
+            return StreamingResponse(
+                _stream_reasoning_to_content(resp),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache"},
+            )
 
         def gen():
             try:
@@ -246,6 +319,11 @@ def chat_completions(req: ChatCompletionRequest, _: None = Depends(require_auth)
         data = resp.read()
     finally:
         resp.close()
+    if REASONING_TO_CONTENT:
+        try:
+            return JSONResponse(_wrap_reasoning_final(json.loads(data)))
+        except json.JSONDecodeError:
+            pass
     return Response(content=data, media_type="application/json")
 
 
