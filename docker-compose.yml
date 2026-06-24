@@ -1,0 +1,14 @@
+services:
+  openwebui-proxy:
+    build: .
+    ports:
+      - "${PROXY_PORT:-5002}:5002"
+    environment:
+      - PROXY_PORT=5002
+      - UPSTREAM_BASE=${UPSTREAM_BASE:-http://localhost:3000}
+      - OWUI_EMAIL=${OWUI_EMAIL:-}
+      - OWUI_PASSWORD=${OWUI_PASSWORD:-}
+      - OWUI_TOKEN=${OWUI_TOKEN:-}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-qwen3.6:35b-a3b}
+      - PROXY_API_KEY=${PROXY_API_KEY:-}
+    restart: unless-stopped

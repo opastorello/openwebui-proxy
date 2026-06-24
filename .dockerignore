@@ -1,0 +1,16 @@
+.env
+.env.example
+__pycache__
+*.pyc
+.git
+.gitignore
+.venv
+venv
+.github
+tests
+conftest.py
+ruff.toml
+requirements-dev.txt
+README.md
+CLAUDE.md
+LICENSE

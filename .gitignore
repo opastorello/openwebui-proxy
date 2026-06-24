@@ -1,0 +1,12 @@
+# Secrets — NEVER commit (Open WebUI login / JWT)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
